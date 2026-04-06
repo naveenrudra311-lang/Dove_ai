@@ -1,69 +1,74 @@
-const express = require('express');
-const cors = require('cors');
+import express from "express";
+import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
-app.use(express.json());
-app.use(cors());
 
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.OPENROUTER_API_KEY;
 
-app.post('/api/answer', async (req, res) => {
+app.get("/", (req, res) => {
+  res.send("Interview AI backend running");
+});
 
-  const { question, context } = req.body;
+app.post("/api/answer", async (req, res) => {
+  try {
 
-  if (!question) {
-    return res.status(400).json({ error: 'No question provided' });
-  }
+    const { question, context } = req.body;
 
-  const prompt = `
+    if (!question) {
+      return res.status(400).json({ error: "Question required" });
+    }
+
+    const prompt = `
 You are an expert interview coach.
 
-Answer the interview question clearly and confidently in under 170 words.
-
-Use STAR method for behavioral questions.
+Question: ${question}
 
 Candidate background: ${context || "Not provided"}
 
-Interview question:
-${question}
+Give a confident concise interview answer under 150 words.
 `;
 
-  try {
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-3.5-turbo",
+          messages: [
+            { role: "user", content: prompt }
+          ]
+        })
+      }
+    );
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions",{
-      method:"POST",
-      headers:{
-        "Authorization":"Bearer " + API_KEY,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        model:"meta-llama/llama-3.1-8b-instruct:free",
-        messages:[
-          {role:"user",content:prompt}
-        ]
-      })
-    })
+    const data = await response.json();
 
-    const data = await response.json()
+    const answer =
+      data.choices?.[0]?.message?.content ||
+      "AI could not generate an answer.";
 
-    const answer = data.choices?.[0]?.message?.content || "No response"
-
-    res.json({ answer })
+    res.json({ answer });
 
   } catch (err) {
 
-    res.status(500).json({ error: err.message })
+    console.error(err);
+
+    res.status(500).json({
+      error: "Server error"
+    });
 
   }
+});
 
-})
-
-app.get('/', (req,res)=>{
-  res.send("Interview AI backend running")
-})
-
-const PORT = process.env.PORT || 3001
-
-app.listen(PORT,()=>{
-  console.log("Server running on port " + PORT)
-})
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
